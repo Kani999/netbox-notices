@@ -5,6 +5,7 @@ from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
+from django.utils.module_loading import import_string
 from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import ContactRole, Tenant
 from utilities.forms import add_blank_choice, get_field_value
@@ -40,6 +41,28 @@ from .models import (
     TemplateScope,
 )
 from .utils import get_allowed_content_types
+
+# Parent shown next to each option / used for the cascade filter. Only models whose brief API
+# serializer returns the parent belong here (Device, Site and PowerFeed do not).
+GFK_PARENT_FIELDS = {
+    "dcim.interface": "device",
+    "virtualization.vminterface": "virtual_machine",
+    "circuits.circuit": "provider",
+    "notices.maintenance": "provider",
+    "notices.outage": "provider",
+}
+
+# ponytail: demo switch, delete once a variant is chosen (see .scratch/impact-target-picker/spec.md)
+DEFAULT_PICKER_VARIANT = "selector,parent"
+
+
+def has_filter_form(model):
+    """NetBox's object selector modal needs `<app>.forms.<Model>FilterForm`; a missing one would 500."""
+    try:
+        import_string(f"{model._meta.app_label}.forms.{model.__name__}FilterForm")
+    except ImportError:
+        return False
+    return True
 
 
 class GenericForeignKeyFormMixin:
@@ -93,6 +116,27 @@ class GenericForeignKeyFormMixin:
             if object_id:
                 initial = model_class.objects.get(pk=object_id)
 
+            # ponytail: demo switch, delete once a variant is chosen
+            raw_variant = (self.data if self.is_bound else self.initial).get("picker_variant")
+            variants = set((raw_variant or DEFAULT_PICKER_VARIANT).split(","))
+            parent = GFK_PARENT_FIELDS.get(model_class._meta.label_lower)
+            kwargs = {}
+            if "selector" in variants and has_filter_form(model_class):
+                kwargs["selector"] = True
+            if "parent" in variants and parent:
+                kwargs["context"] = {"parent": parent}
+            if "cascade" in variants and parent:
+                parent_model = model_class._meta.get_field(parent).remote_field.model
+                self.fields[f"{field_prefix}_parent"] = DynamicModelChoiceField(
+                    label=parent_model._meta.verbose_name.title(),
+                    queryset=parent_model.objects.all(),
+                    required=False,
+                    selector=has_filter_form(parent_model),
+                    initial=getattr(initial, parent, None),
+                    help_text=f"Narrows the {model_class._meta.verbose_name} list below",
+                )
+                kwargs["query_params"] = {f"{parent}_id": f"${field_prefix}_parent"}
+
             # Create dynamic choice field with model-specific queryset
             choice_field_name = f"{field_prefix}_choice"
             self.fields[choice_field_name] = DynamicModelChoiceField(
@@ -100,6 +144,7 @@ class GenericForeignKeyFormMixin:
                 queryset=model_class.objects.all(),
                 required=True,
                 initial=initial,
+                **kwargs,
             )
         except (ContentType.DoesNotExist, ObjectDoesNotExist):
             # Invalid content type or object - form validation will catch this
@@ -346,9 +391,14 @@ class ImpactForm(GenericForeignKeyFormMixin, NetBoxModelForm):
         ("target", "target_content_type", "target_object_id"),
     ]
 
+    # ponytail: demo switch, delete once a variant is chosen. CSV of selector|parent|cascade ("none"
+    # for today's bare dropdown), seeded from ?picker_variant=... (a bare GET param would not survive
+    # the HTMXSelect reload).
+    picker_variant = forms.CharField(required=False, widget=forms.HiddenInput)
+
     fieldsets = (
-        FieldSet("event_content_type", "event_choice", name="Event"),
-        FieldSet("target_content_type", "target_choice", name="Target"),
+        FieldSet("picker_variant", "event_content_type", "event_parent", "event_choice", name="Event"),
+        FieldSet("target_content_type", "target_parent", "target_choice", name="Target"),
         FieldSet("impact", "tags", name="Impact Details"),
     )
 
@@ -438,7 +488,7 @@ class EventNotificationForm(GenericForeignKeyFormMixin, NetBoxModelForm):
     ]
 
     fieldsets = (
-        FieldSet("event_content_type", "event_choice", name="Event"),
+        FieldSet("event_content_type", "event_parent", "event_choice", name="Event"),
         FieldSet("subject", "email_from", "email_received", name="Email Details"),
         FieldSet("email_body", name="Message"),
     )

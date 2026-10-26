@@ -273,3 +273,48 @@ class TestImpactForm:
         assert "maintenance or outage event" in form.fields["event_object_id"].help_text
         assert "Type of affected object" == form.fields["target_content_type"].help_text
         assert "Select the specific object affected by this event" == form.fields["target_object_id"].help_text
+
+
+@pytest.mark.django_db
+class TestImpactFormTargetPicker:
+    """The target dropdown must give the user device context for Interface targets."""
+
+    @pytest.fixture
+    def interface_ct(self):
+        from dcim.models import Interface
+        from django.contrib.contenttypes.models import ContentType
+
+        return ContentType.objects.get_for_model(Interface)
+
+    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
+    def test_default_variant_has_selector_and_parent(self, interface_ct):
+        from notices.forms import ImpactForm
+
+        form = ImpactForm(initial={"target_content_type": interface_ct.pk})
+        attrs = form.fields["target_choice"].widget.attrs
+
+        assert attrs["selector"] == "dcim.interface"
+        assert attrs["ts-parent-field"] == "device"
+        assert "target_parent" not in form.fields
+
+    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
+    def test_cascade_variant_adds_device_filter_field(self, interface_ct):
+        from dcim.models import Device
+
+        from notices.forms import ImpactForm
+
+        form = ImpactForm(initial={"target_content_type": interface_ct.pk, "picker_variant": "cascade"})
+
+        assert form.fields["target_parent"].queryset.model is Device
+        assert form.fields["target_choice"].widget.attrs.get("selector") is None
+        assert form.fields["target_choice"].query_params == {"device_id": "$target_parent"}
+
+    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
+    def test_none_variant_is_the_bare_dropdown(self, interface_ct):
+        from notices.forms import ImpactForm
+
+        form = ImpactForm(initial={"target_content_type": interface_ct.pk, "picker_variant": "none"})
+        attrs = form.fields["target_choice"].widget.attrs
+
+        assert "selector" not in attrs
+        assert "ts-parent-field" not in attrs
