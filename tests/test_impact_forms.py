@@ -286,7 +286,14 @@ class TestImpactFormTargetPicker:
 
         return ContentType.objects.get_for_model(Interface)
 
-    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
+    @override_settings(
+        PLUGINS_CONFIG={
+            "notices": {
+                "allowed_content_types": ["dcim.Interface"],
+                "parent_fields": {"dcim.Interface": "device"},
+            }
+        }
+    )
     def test_interface_target_has_selector_and_parent(self, interface_ct):
         from notices.forms import ImpactForm
 
@@ -313,10 +320,11 @@ class TestImpactFormTargetPicker:
         assert "ts-parent-field" not in form.fields["target_choice"].widget.attrs
         assert [w.id for w in check_parent_fields(None)] == ["notices.W002"]
 
-    @override_settings(PLUGINS_CONFIG={"notices": {"parent_fields": {"dcim.Interface": ""}}})
-    def test_empty_value_disables_default_parent(self):
-        from dcim.models import Interface
+    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
+    def test_no_parent_without_config(self, interface_ct):
+        from notices.forms import ImpactForm
 
-        from notices.utils import parent_field_for
+        attrs = ImpactForm(initial={"target_content_type": interface_ct.pk}).fields["target_choice"].widget.attrs
 
-        assert parent_field_for(Interface) is None
+        assert attrs["selector"] == "dcim.interface"
+        assert "ts-parent-field" not in attrs

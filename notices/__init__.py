@@ -9,7 +9,7 @@ __version__ = "1.3.0"
 
 from netbox.plugins import PluginConfig
 
-from .constants import DEFAULT_ALLOWED_CONTENT_TYPES, DEFAULT_PARENT_FIELDS
+from .constants import DEFAULT_ALLOWED_CONTENT_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class NoticesConfig(PluginConfig):
 
     default_settings = {
         "allowed_content_types": DEFAULT_ALLOWED_CONTENT_TYPES,
-        "parent_fields": DEFAULT_PARENT_FIELDS,
+        "parent_fields": {},
         "ical_past_days_default": 30,
         "ical_cache_max_age": 900,
         "ical_token_placeholder": "changeme",
