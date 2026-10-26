@@ -58,7 +58,7 @@ class TestImpactPickerSmoke:
         assert 'ts-parent-field="device"' in html
         assert 'selector="notices.maintenance"' in html
         assert 'ts-parent-field="provider"' in html
-        assert html.count("Open selector") == 2
+        assert html.count('title="Open selector"') == 2  # one button per GFK dropdown
 
     def test_edit_page_preselects_interface(self, admin_client, maintenance, interface):
         from notices.models import Impact
