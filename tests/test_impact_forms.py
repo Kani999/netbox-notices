@@ -320,6 +320,26 @@ class TestImpactFormTargetPicker:
         assert "ts-parent-field" not in form.fields["target_choice"].widget.attrs
         assert [w.id for w in check_parent_fields(None)] == ["notices.W002"]
 
+    @override_settings(PLUGINS_CONFIG={"notices": {"parent_fields": {"bogus.Model": "x", "dcim": "y"}}})
+    def test_unknown_model_in_parent_fields_is_reported(self):
+        from notices.checks import check_parent_fields
+
+        warnings = check_parent_fields(None)
+
+        assert [w.id for w in warnings] == ["notices.W002", "notices.W002"]
+        assert "bogus.model" in warnings[0].msg
+
+    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["notices.Impact"]}})
+    def test_model_without_filter_form_gets_no_selector(self):
+        from django.contrib.contenttypes.models import ContentType
+
+        from notices.forms import ImpactForm, has_filter_form
+        from notices.models import Impact
+
+        assert has_filter_form(Impact) is False  # notices.forms has no ImpactFilterForm
+        form = ImpactForm(initial={"target_content_type": ContentType.objects.get_for_model(Impact).pk})
+        assert "selector" not in form.fields["target_choice"].widget.attrs
+
     @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
     def test_no_parent_without_config(self, interface_ct):
         from notices.forms import ImpactForm
