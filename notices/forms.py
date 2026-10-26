@@ -118,6 +118,8 @@ class GenericForeignKeyFormMixin:
 
             # ponytail: demo switch, delete once a variant is chosen
             raw_variant = (self.data if self.is_bound else self.initial).get("picker_variant")
+            if isinstance(raw_variant, list):  # duplicated GET param on HTMX reload
+                raw_variant = raw_variant[0] if raw_variant else None
             variants = set((raw_variant or DEFAULT_PICKER_VARIANT).split(","))
             parent = GFK_PARENT_FIELDS.get(model_class._meta.label_lower)
             kwargs = {}
