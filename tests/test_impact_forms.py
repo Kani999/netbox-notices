@@ -320,14 +320,30 @@ class TestImpactFormTargetPicker:
         assert "ts-parent-field" not in form.fields["target_choice"].widget.attrs
         assert [w.id for w in check_parent_fields(None)] == ["notices.W002"]
 
-    @override_settings(PLUGINS_CONFIG={"notices": {"parent_fields": {"bogus.Model": "x", "dcim": "y"}}})
-    def test_unknown_model_in_parent_fields_is_reported(self):
+    @override_settings(
+        PLUGINS_CONFIG={
+            "notices": {
+                "parent_fields": {"bogus.Model": "x", "dcim": "y", "dcim.Interface": "", "notices.Impact": "target"}
+            }
+        }
+    )
+    def test_invalid_parent_fields_entries_are_reported_as_written(self):
         from notices.checks import check_parent_fields
 
         warnings = check_parent_fields(None)
 
-        assert [w.id for w in warnings] == ["notices.W002", "notices.W002"]
-        assert "bogus.model" in warnings[0].msg
+        assert [w.id for w in warnings] == ["notices.W002"] * 4  # unknown model, bad label, empty, GFK not FK
+        assert "'bogus.Model'" in warnings[0].msg
+
+    @override_settings(PLUGINS_CONFIG={"notices": {"parent_fields": [("dcim.Interface", "device")]}})
+    def test_parent_fields_not_a_dict_is_reported_not_raised(self):
+        from dcim.models import Interface
+
+        from notices.checks import check_parent_fields
+        from notices.utils import parent_field_for
+
+        assert parent_field_for(Interface) is None
+        assert [w.id for w in check_parent_fields(None)] == ["notices.W002"]
 
     @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["notices.Impact"]}})
     def test_model_without_filter_form_gets_no_selector(self):

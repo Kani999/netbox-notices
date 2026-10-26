@@ -7,7 +7,7 @@ All plugin behaviour is configured through the `PLUGINS_CONFIG["notices"]` dict 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `allowed_content_types` | `["circuits.Circuit", "dcim.Device", "dcim.PowerFeed", "dcim.Site"]` | Content types that may be the target of an `Impact`. Format: `app_label.ModelName`. |
-| `parent_fields` | `{}` | Parent object shown next to each option in the Impact form's event/target dropdowns (`device > Gi0/1`), per model. See below. |
+| `parent_fields` | `{}` | Parent object shown next to each option in the Impact and EventNotification forms' object dropdowns (`device > Gi0/1`), per model. See below. |
 | `ical_past_days_default` | `30` | How many days of past events to include in the iCal feed when the request does not specify `past_days`. |
 | `ical_cache_max_age` | `900` | `Cache-Control: max-age` (seconds) sent with the iCal subscription feed. |
 | `ical_token_placeholder` | `"changeme"` | Placeholder string shown in the calendar UI's iCal subscription URL. Cosmetic only; the user replaces it with their own API token. |
@@ -47,7 +47,7 @@ PLUGINS_CONFIG = {
 
 ## parent_fields
 
-The Impact form picks an event or target object in two steps: content type, then object. The object
+The Impact and EventNotification forms pick an event or target object in two steps: content type, then object. The object
 dropdown is NetBox's API-backed select and shows each object's display name only, so an `Interface`
 would appear as just `Gi0/1`. `parent_fields` names a ForeignKey per model whose display is shown next
 to each option and on the selected value (`router1 > Gi0/1`). Nothing is shown unless configured.
@@ -55,8 +55,8 @@ to each option and on the selected value (`router1 > Gi0/1`). Nothing is shown u
 - Keys are `app_label.ModelName` (case-insensitive), values the ForeignKey name on that model.
 - The parent must be included in the model's brief REST serializer (the dropdown fetches `?brief=1`).
   `Device`, `Site` and `PowerFeed` carry no parent there, so an entry for them has no visible effect.
-- Invalid entries (unknown model, field missing or not a ForeignKey) are ignored at runtime and
-  reported at startup as system check `notices.W002`.
+- Invalid entries (unknown model, field missing or not a ForeignKey, empty value) and a setting that
+  is not a dict are ignored at runtime and reported at startup as system check `notices.W002`.
 
 Independently of this map, every dropdown gets NetBox's object selector button, which opens that
 model's own filter form (device, site, role, provider, ...).

@@ -44,9 +44,14 @@ from .utils import get_allowed_content_types, parent_field_for
 
 
 def has_filter_form(model):
-    """NetBox's object selector modal needs `<app>.forms.<Model>FilterForm`; a missing one would 500."""
+    """
+    NetBox's object selector modal (ObjectSelectorView) imports `<app>.forms.<Model>FilterForm` and
+    `<app>.filtersets.<Model>FilterSet` unguarded; offer the selector only when both exist.
+    """
+    app, name = model._meta.app_label, model.__name__
     try:
-        import_string(f"{model._meta.app_label}.forms.{model.__name__}FilterForm")
+        import_string(f"{app}.forms.{name}FilterForm")
+        import_string(f"{app}.filtersets.{name}FilterSet")
     except ImportError:
         return False
     return True

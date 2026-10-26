@@ -4,6 +4,7 @@ Utility functions for vendor notification plugin
 
 from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
+from django.db import models
 
 from .constants import DEFAULT_ALLOWED_CONTENT_TYPES
 
@@ -23,9 +24,12 @@ def get_parent_fields():
     Parent-field map from PLUGINS_CONFIG['notices']['parent_fields'] (no built-in default).
 
     Keys are "app_label.ModelName" (any case), values the name of a ForeignKey on that model.
+    Malformed shapes are dropped here; check_parent_fields (W002) reports them.
     """
     configured = settings.PLUGINS_CONFIG.get("notices", {}).get("parent_fields", {})
-    return {key.lower(): value for key, value in configured.items() if value}
+    if not isinstance(configured, dict):
+        return {}
+    return {key.lower(): value for key, value in configured.items() if isinstance(key, str) and isinstance(value, str)}
 
 
 def parent_field_for(model):
@@ -37,4 +41,4 @@ def parent_field_for(model):
         field = model._meta.get_field(name)
     except FieldDoesNotExist:
         return None
-    return name if field.many_to_one else None
+    return name if isinstance(field, models.ForeignKey) else None

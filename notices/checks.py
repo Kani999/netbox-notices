@@ -8,10 +8,11 @@ filters — a class of bug worth catching at startup rather than at query time.
 """
 
 from django.apps import apps
+from django.conf import settings
 from django.core.checks import Warning, register
 
 from .resolvers import SITE_RESOLVERS
-from .utils import get_allowed_content_types, get_parent_fields, parent_field_for
+from .utils import get_allowed_content_types, parent_field_for
 
 
 @register()
@@ -39,19 +40,28 @@ def check_resolver_coverage(app_configs, **kwargs):
 
 @register()
 def check_parent_fields(app_configs, **kwargs):
-    """W002: warn for `parent_fields` entries that name a missing model or a non-ForeignKey field."""
+    """W002: warn for a malformed `parent_fields` setting or entries naming a missing model / non-ForeignKey."""
+    hint = "parent_fields must be a dict of installed 'app_label.ModelName' -> name of a ForeignKey on that model."
+    configured = settings.PLUGINS_CONFIG.get("notices", {}).get("parent_fields", {})
+    if not isinstance(configured, dict):
+        return [
+            Warning(
+                f"Ignoring parent_fields: expected a dict, got {type(configured).__name__}.",
+                hint=hint,
+                id="notices.W002",
+            )
+        ]
+
     warnings = []
-    for label, field_name in get_parent_fields().items():
-        try:
-            model = apps.get_model(label)
-        except (LookupError, ValueError):
-            model = None
-        if model is None or parent_field_for(model) != field_name:
+    for label, field_name in configured.items():
+        model = None
+        if isinstance(label, str):
+            try:
+                model = apps.get_model(label)
+            except (LookupError, ValueError):
+                pass
+        if model is None or not isinstance(field_name, str) or parent_field_for(model) != field_name:
             warnings.append(
-                Warning(
-                    f"Ignoring parent_fields entry {label!r}: {field_name!r}.",
-                    hint="The key must be an installed 'app_label.ModelName' and the value a ForeignKey on it.",
-                    id="notices.W002",
-                )
+                Warning(f"Ignoring parent_fields entry {label!r}: {field_name!r}.", hint=hint, id="notices.W002")
             )
     return warnings

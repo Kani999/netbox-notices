@@ -6,9 +6,7 @@ HTMX reload that follows picking a content type).
 """
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.test import Client
 from django.urls import reverse
 
 PICKER_CONFIG = {
@@ -22,14 +20,6 @@ PICKER_CONFIG = {
 @pytest.fixture(autouse=True)
 def picker_config(settings):
     settings.PLUGINS_CONFIG = PICKER_CONFIG
-
-
-@pytest.fixture
-def admin_client(db):
-    get_user_model().objects.create_superuser(username="admin", email="admin@example.com", password="adminpass123")
-    client = Client()
-    client.login(username="admin", password="adminpass123")
-    return client
 
 
 @pytest.fixture
