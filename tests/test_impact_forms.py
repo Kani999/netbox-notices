@@ -287,7 +287,7 @@ class TestImpactFormTargetPicker:
         return ContentType.objects.get_for_model(Interface)
 
     @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
-    def test_default_variant_has_selector_and_parent(self, interface_ct):
+    def test_interface_target_has_selector_and_parent(self, interface_ct):
         from notices.forms import ImpactForm
 
         form = ImpactForm(initial={"target_content_type": interface_ct.pk})
@@ -295,26 +295,28 @@ class TestImpactFormTargetPicker:
 
         assert attrs["selector"] == "dcim.interface"
         assert attrs["ts-parent-field"] == "device"
-        assert "target_parent" not in form.fields
 
-    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
-    def test_cascade_variant_adds_device_filter_field(self, interface_ct):
-        from dcim.models import Device
-
+    @override_settings(
+        PLUGINS_CONFIG={
+            "notices": {
+                "allowed_content_types": ["dcim.Interface"],
+                "parent_fields": {"dcim.Interface": "no_such_field"},
+            }
+        }
+    )
+    def test_invalid_parent_field_is_ignored(self, interface_ct):
+        from notices.checks import check_parent_fields
         from notices.forms import ImpactForm
 
-        form = ImpactForm(initial={"target_content_type": interface_ct.pk, "picker_variant": "cascade"})
+        form = ImpactForm(initial={"target_content_type": interface_ct.pk})
 
-        assert form.fields["target_parent"].queryset.model is Device
-        assert form.fields["target_choice"].widget.attrs.get("selector") is None
-        assert form.fields["target_choice"].query_params == {"device_id": "$target_parent"}
+        assert "ts-parent-field" not in form.fields["target_choice"].widget.attrs
+        assert [w.id for w in check_parent_fields(None)] == ["notices.W002"]
 
-    @override_settings(PLUGINS_CONFIG={"notices": {"allowed_content_types": ["dcim.Interface"]}})
-    def test_none_variant_is_the_bare_dropdown(self, interface_ct):
-        from notices.forms import ImpactForm
+    @override_settings(PLUGINS_CONFIG={"notices": {"parent_fields": {"dcim.Interface": ""}}})
+    def test_empty_value_disables_default_parent(self):
+        from dcim.models import Interface
 
-        form = ImpactForm(initial={"target_content_type": interface_ct.pk, "picker_variant": "none"})
-        attrs = form.fields["target_choice"].widget.attrs
+        from notices.utils import parent_field_for
 
-        assert "selector" not in attrs
-        assert "ts-parent-field" not in attrs
+        assert parent_field_for(Interface) is None
