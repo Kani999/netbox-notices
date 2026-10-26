@@ -8,7 +8,7 @@ HTMX reload that follows picking a content type).
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.test import Client, override_settings
+from django.test import Client
 from django.urls import reverse
 
 PICKER_CONFIG = {
@@ -17,6 +17,11 @@ PICKER_CONFIG = {
         "parent_fields": {"dcim.Interface": "device", "notices.Maintenance": "provider"},
     }
 }
+
+
+@pytest.fixture(autouse=True)
+def picker_config(settings):
+    settings.PLUGINS_CONFIG = PICKER_CONFIG
 
 
 @pytest.fixture
@@ -35,7 +40,6 @@ def interface(device):
 
 
 @pytest.mark.django_db
-@override_settings(PLUGINS_CONFIG=PICKER_CONFIG)
 class TestImpactPickerSmoke:
     def test_add_page_interface_target_has_selector_and_parent(self, admin_client, maintenance):
         from dcim.models import Interface
