@@ -1,18 +1,18 @@
 """
 Django system checks for the notices plugin.
 
-Currently checks that every entry in ``allowed_content_types`` has a Site
-resolver registered. Without one, impacts targeting that content type silently
-have an empty ``sites`` cache and won't appear in site/region/location
-filters — a class of bug worth catching at startup rather than at query time.
+- W001: every entry in ``allowed_content_types`` has a Site resolver registered.
+  Without one, impacts targeting that content type silently have an empty
+  ``sites`` cache and won't appear in site/region/location filters -- a class
+  of bug worth catching at startup rather than at query time.
+- W002: every ``parent_fields`` entry names an installed model and a parent
+  field the object dropdown can show; invalid entries are ignored at runtime.
 """
 
-from django.apps import apps
-from django.conf import settings
 from django.core.checks import Warning, register
 
 from .resolvers import SITE_RESOLVERS
-from .utils import get_allowed_content_types, parent_field_for
+from .utils import get_allowed_content_types, parse_parent_fields
 
 
 @register()
@@ -40,28 +40,18 @@ def check_resolver_coverage(app_configs, **kwargs):
 
 @register()
 def check_parent_fields(app_configs, **kwargs):
-    """W002: warn for a malformed `parent_fields` setting or entries naming a missing model / non-ForeignKey."""
-    hint = "parent_fields must be a dict of installed 'app_label.ModelName' -> name of a ForeignKey on that model."
-    configured = settings.PLUGINS_CONFIG.get("notices", {}).get("parent_fields", {})
-    if not isinstance(configured, dict):
-        return [
-            Warning(
-                f"Ignoring parent_fields: expected a dict, got {type(configured).__name__}.",
-                hint=hint,
-                id="notices.W002",
-            )
-        ]
-
-    warnings = []
-    for label, field_name in configured.items():
-        model = None
-        if isinstance(label, str):
-            try:
-                model = apps.get_model(label)
-            except (LookupError, ValueError):
-                pass
-        if model is None or not isinstance(field_name, str) or parent_field_for(model) != field_name:
-            warnings.append(
-                Warning(f"Ignoring parent_fields entry {label!r}: {field_name!r}.", hint=hint, id="notices.W002")
-            )
-    return warnings
+    """W002: warn for a malformed `parent_fields` setting or entries the runtime ignores."""
+    hint = (
+        "parent_fields must be a dict of installed 'app_label.ModelName' (any case) -> name of a ForeignKey "
+        "on that model that its brief REST serializer includes."
+    )
+    return [
+        Warning(
+            f"Ignoring parent_fields: {reason}."
+            if key is None
+            else f"Ignoring parent_fields entry {key!r}: {name!r} ({reason}).",
+            hint=hint,
+            id="notices.W002",
+        )
+        for key, name, reason in parse_parent_fields()[1]
+    ]
